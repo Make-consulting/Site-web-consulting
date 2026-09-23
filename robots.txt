@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.formation-incendie-paris.com/sitemap.xml
