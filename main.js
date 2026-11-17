@@ -262,35 +262,34 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var url = 'https://script.google.com/macros/s/AKfycbzcmJ85wr7qaQU-75tYN67jIIUaPOS5py2aJTYCp5-KAxZ_UILnc8EBDagtlojyWV6X/exec';
+      // Envoi vers le CRM MAKE (ajout dans les leads + e-mail d'alerte), comme le site formation
+      var url = 'https://gestion.make-consulting.fr/api/public/lead';
       var btn = document.getElementById('contact-submit'), err = document.getElementById('contact-error');
       var label = btn.innerHTML;
       btn.disabled = true; btn.textContent = 'Envoi en cours…'; err.hidden = true;
-      var q = 'action=recevoir_lead_site&token=MAKE-SITE-2026';
-      ['prenom', 'nom', 'organisation', 'email', 'telephone', 'objet', 'message'].forEach(function (n) {
+      var data = {};
+      ['prenom', 'nom', 'organisation', 'email', 'telephone', 'objet', 'message', 'site_web'].forEach(function (n) {
         var el = form.querySelector('[name="' + n + '"]');
-        var v = el ? el.value : '';
-        if (n === 'objet') { var u = form.querySelector('input[name="univers"]:checked'); var src = u ? u.value : form.dataset.source; v = (src ? '[' + src + '] ' : '') + v; }
-        if (n === 'message') {
-          var extra = ['secteur', 'effectif'].map(function (k) { var e = form.querySelector('[name="' + k + '"]'); return e && e.value ? k + ' : ' + e.value : ''; }).filter(Boolean).join(' | ');
-          if (extra) v = extra + '\n\n' + v;
-        }
-        q += '&' + encodeURIComponent(n) + '=' + encodeURIComponent(v);
+        data[n] = el ? el.value : '';
       });
-      var cb = 'jsonp_make_' + Date.now(), s = document.createElement('script'), timer;
-      var cleanup = function () { delete window[cb]; if (s.parentNode) s.parentNode.removeChild(s); };
-      var fail = function () { clearTimeout(timer); cleanup(); btn.disabled = false; btn.innerHTML = label; err.hidden = false; };
-      window[cb] = function () {
-        clearTimeout(timer); cleanup();
-        document.getElementById('form-zone').innerHTML =
-          '<div class="form-success"><div class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>' +
-          '<h3>Message envoyé</h3><p class="lead">Merci. Je vous réponds sous 24 h ouvrées.</p></div>';
-        if (window.gtag) window.gtag('event', 'generate_lead');
-      };
-      s.onerror = fail;
-      timer = setTimeout(fail, 12000);
-      s.src = url + '?' + q + '&callback=' + cb;
-      document.body.appendChild(s);
+      var u = form.querySelector('input[name="univers"]:checked');
+      var src = u ? u.value : form.dataset.source;
+      data.objet = (src ? '[' + src + '] ' : '') + data.objet;
+      var extra = ['secteur', 'effectif'].map(function (k) { var e = form.querySelector('[name="' + k + '"]'); return e && e.value ? k + ' : ' + e.value : ''; }).filter(Boolean).join(' | ');
+      if (extra) data.message = extra + '\n\n' + data.message;
+      var fail = function () { btn.disabled = false; btn.innerHTML = label; err.hidden = false; };
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 15000);
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data), signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) {
+          clearTimeout(timer);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          document.getElementById('form-zone').innerHTML =
+            '<div class="form-success"><div class="ico-tile"><svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+            '<h3>Message envoyé</h3><p class="lead">Merci. Je vous réponds sous 24 h ouvrées.</p></div>';
+          if (window.gtag) window.gtag('event', 'generate_lead');
+        })
+        .catch(function () { clearTimeout(timer); fail(); });
     });
   }
 })();
